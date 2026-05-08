@@ -33,6 +33,9 @@ function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [siteDialogOpen, setSiteDialogOpen] = useState(false);
+  const [siteForm, setSiteForm] = useState({ name: "", address: "", latitude: "", longitude: "" });
+  const [pickMode, setPickMode] = useState(false);
 
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
@@ -188,8 +191,25 @@ function Dashboard() {
         </div>
 
         <div className="grid lg:grid-cols-[1fr_380px] gap-4">
-          <Card className="overflow-hidden h-[500px] p-0">
-            <EquipmentMap markers={markers} onMarkerClick={setSelectedId} selectedId={selectedId} />
+          <Card className="overflow-hidden h-[500px] p-0 relative">
+            {pickMode && (
+              <div className="absolute top-2 left-1/2 -translate-x-1/2 z-[400] bg-primary text-primary-foreground text-xs font-medium px-3 py-1.5 rounded-full shadow-lg flex items-center gap-2 pointer-events-auto">
+                <MapPin className="h-3.5 w-3.5" /> Click map to set site location
+                <button type="button" onClick={() => setPickMode(false)} className="ml-1 underline">Cancel</button>
+              </div>
+            )}
+            <EquipmentMap
+              markers={markers}
+              onMarkerClick={setSelectedId}
+              selectedId={selectedId}
+              pickMode={pickMode}
+              pickedPoint={siteForm.latitude && siteForm.longitude ? { lat: parseFloat(siteForm.latitude), lng: parseFloat(siteForm.longitude) } : null}
+              onMapClick={(lat, lng) => {
+                setSiteForm(f => ({ ...f, latitude: lat.toFixed(6), longitude: lng.toFixed(6) }));
+                setPickMode(false);
+                setSiteDialogOpen(true);
+              }}
+            />
           </Card>
           <Card className="p-4 h-[500px] flex flex-col">
             <div className="flex items-center justify-between mb-3">
@@ -268,9 +288,21 @@ function Dashboard() {
 
           <TabsContent value="sites" className="mt-4">
             <Card className="p-4">
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
                 <h3 className="font-semibold">Job sites</h3>
-                <NewSiteDialog onCreated={() => qc.invalidateQueries({ queryKey: ["sites"] })} />
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="outline" onClick={() => { setPickMode(true); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
+                    <MapPin className="h-4 w-4 mr-1" />Pick on map
+                  </Button>
+                  <NewSiteDialog
+                    open={siteDialogOpen}
+                    onOpenChange={setSiteDialogOpen}
+                    form={siteForm}
+                    setForm={setSiteForm}
+                    onPickOnMap={() => { setSiteDialogOpen(false); setPickMode(true); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                    onCreated={() => qc.invalidateQueries({ queryKey: ["sites"] })}
+                  />
+                </div>
               </div>
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {(sitesQ.data ?? []).map(s => {
@@ -406,9 +438,15 @@ function NewEquipmentDialog({ sites, userId, onCreated }: { sites: Site[]; userI
   );
 }
 
-function NewSiteDialog({ onCreated }: { onCreated: () => void }) {
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", address: "", latitude: "", longitude: "" });
+type SiteForm = { name: string; address: string; latitude: string; longitude: string };
+function NewSiteDialog({ open, onOpenChange, form, setForm, onPickOnMap, onCreated }: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  form: SiteForm;
+  setForm: React.Dispatch<React.SetStateAction<SiteForm>>;
+  onPickOnMap: () => void;
+  onCreated: () => void;
+}) {
   const [busy, setBusy] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
@@ -420,13 +458,13 @@ function NewSiteDialog({ onCreated }: { onCreated: () => void }) {
       });
       if (error) throw error;
       toast.success("Site added");
-      setOpen(false); setForm({ name: "", address: "", latitude: "", longitude: "" });
+      onOpenChange(false); setForm({ name: "", address: "", latitude: "", longitude: "" });
       onCreated();
     } catch (e: any) { toast.error(e.message); } finally { setBusy(false); }
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild><Button size="sm"><Plus className="h-4 w-4 mr-1" />New site</Button></DialogTrigger>
       <DialogContent>
         <DialogHeader><DialogTitle>Add job site</DialogTitle></DialogHeader>
@@ -437,8 +475,10 @@ function NewSiteDialog({ onCreated }: { onCreated: () => void }) {
             <div><Label>Latitude</Label><Input type="number" step="any" value={form.latitude} onChange={e => setForm({...form, latitude: e.target.value})} required placeholder="40.7128" /></div>
             <div><Label>Longitude</Label><Input type="number" step="any" value={form.longitude} onChange={e => setForm({...form, longitude: e.target.value})} required placeholder="-74.0060" /></div>
           </div>
-          <p className="text-xs text-muted-foreground">Tip: right-click on Google Maps to copy coordinates.</p>
-          <DialogFooter><Button type="submit" disabled={busy}>Add site</Button></DialogFooter>
+          <Button type="button" variant="outline" size="sm" onClick={onPickOnMap} className="w-full">
+            <MapPin className="h-4 w-4 mr-1" />Pick location on map
+          </Button>
+          <DialogFooter><Button type="submit" disabled={busy || !form.latitude || !form.longitude}>Add site</Button></DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

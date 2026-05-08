@@ -112,5 +112,10 @@
   body { background-color: var(--color-background); color: var(--color-foreground); }
 }
 
-/* Leaflet override so map fills container */
-.leaflet-container { background: var(--color-muted); border-radius: var(--radius); }
+/* Leaflet override so map fills container and stays below modals */
+.leaflet-container { background: var(--color-muted); border-radius: var(--radius); isolation: isolate; z-index: 0; }
+.leaflet-pane, .leaflet-top, .leaflet-bottom, .leaflet-control { z-index: 1 !important; }
+.leaflet-pane.leaflet-overlay-pane, .leaflet-pane.leaflet-marker-pane,
+.leaflet-pane.leaflet-tooltip-pane { z-index: 2 !important; }
+.leaflet-pane.leaflet-popup-pane { z-index: 3 !important; }
+.leaflet-container.picking { cursor: crosshair !important; }
