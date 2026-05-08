@@ -16,7 +16,7 @@ const colors = {
   maintenance: "oklch(0.6 0.22 27)",
 };
 
-function pinIcon(status: MapMarker["status"]) {
+function makePinIcon(L: typeof LType, status: MapMarker["status"]) {
   const c = colors[status];
   const html = `<div style="position:relative;width:30px;height:40px"><div style="position:absolute;inset:0;background:${c};clip-path:path('M15 0C6.7 0 0 6.7 0 15c0 11 15 25 15 25s15-14 15-25C30 6.7 23.3 0 15 0z');box-shadow:0 2px 6px rgba(0,0,0,.35)"></div><div style="position:absolute;left:9px;top:9px;width:12px;height:12px;border-radius:50%;background:white"></div></div>`;
   return L.divIcon({ html, className: "", iconSize: [30, 40], iconAnchor: [15, 40] });
@@ -32,11 +32,18 @@ export function EquipmentMap({
   selectedId?: string | null;
 }) {
   const elRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<L.Map | null>(null);
-  const layerRef = useRef<L.LayerGroup | null>(null);
+  const mapRef = useRef<LType.Map | null>(null);
+  const layerRef = useRef<LType.LayerGroup | null>(null);
+  const [L, setL] = useState<typeof LType | null>(null);
 
   useEffect(() => {
-    if (!elRef.current || mapRef.current) return;
+    let cancelled = false;
+    import("leaflet").then((mod) => { if (!cancelled) setL(mod.default ?? mod); });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!L || !elRef.current || mapRef.current) return;
     const map = L.map(elRef.current, { zoomControl: true }).setView([39.5, -98.35], 4);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: "© OpenStreetMap",
@@ -44,21 +51,18 @@ export function EquipmentMap({
     }).addTo(map);
     layerRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
-    return () => {
-      map.remove();
-      mapRef.current = null;
-    };
-  }, []);
+    return () => { map.remove(); mapRef.current = null; };
+  }, [L]);
 
   useEffect(() => {
     const map = mapRef.current;
     const layer = layerRef.current;
-    if (!map || !layer) return;
+    if (!L || !map || !layer) return;
     layer.clearLayers();
     if (!markers.length) return;
     const bounds: [number, number][] = [];
     markers.forEach((m) => {
-      const marker = L.marker([m.lat, m.lng], { icon: pinIcon(m.status) })
+      const marker = L.marker([m.lat, m.lng], { icon: makePinIcon(L, m.status) })
         .bindPopup(`<strong>${m.label}</strong>${m.sublabel ? `<br/><span style='color:#666'>${m.sublabel}</span>` : ""}`)
         .on("click", () => onMarkerClick?.(m.id))
         .addTo(layer);
@@ -67,7 +71,7 @@ export function EquipmentMap({
     });
     if (bounds.length === 1) map.setView(bounds[0], 13);
     else map.fitBounds(bounds, { padding: [40, 40] });
-  }, [markers, selectedId, onMarkerClick]);
+  }, [L, markers, selectedId, onMarkerClick]);
 
   return <div ref={elRef} className="h-full w-full rounded-lg" />;
 }
