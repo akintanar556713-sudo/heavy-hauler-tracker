@@ -33,6 +33,9 @@ function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [siteDialogOpen, setSiteDialogOpen] = useState(false);
+  const [siteForm, setSiteForm] = useState({ name: "", address: "", latitude: "", longitude: "" });
+  const [pickMode, setPickMode] = useState(false);
 
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
