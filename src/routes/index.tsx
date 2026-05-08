@@ -396,50 +396,45 @@ function SimulateButton({ userId, sites, onDone }: { userId: string; sites: Site
   const CITIES = ["Manila","Cebu","Davao","Quezon City","Iloilo","Baguio","Cagayan de Oro","Zamboanga","Bacolod","Tacloban","Puerto Princesa"];
   const rand = <T,>(a: T[]) => a[Math.floor(Math.random() * a.length)];
 
+  const simulateOne = async () => {
+    const lat = 6 + Math.random() * 12;
+    const lng = 120 + Math.random() * 6;
+    const customer = `${rand(FIRST)} ${rand(LAST)}`;
+    const type = rand(TYPES);
+    const ident = `${type.slice(0,2).toUpperCase()}-${Math.floor(1000 + Math.random()*9000)}`;
+    const name = `${type} #${Math.floor(Math.random()*900)+100}`;
+
+    const { data: site, error: sErr } = await supabase.from("sites").insert({
+      name: `${rand(CITIES)} Site ${Math.floor(Math.random()*900)}`,
+      address: `Simulated location, Philippines`,
+      latitude: lat, longitude: lng,
+    }).select().single();
+    if (sErr) throw sErr;
+
+    const { data: eq, error: eErr } = await supabase.from("equipment").insert({
+      name, type, identifier: ident, site_id: site.id, latitude: lat, longitude: lng,
+      status: "checked_out",
+    }).select().single();
+    if (eErr) throw eErr;
+
+    await supabase.from("checkouts").insert({
+      equipment_id: eq.id, user_id: userId, notes: `Simulated checkout by ${customer}`,
+    });
+    await supabase.from("audit_log").insert([
+      { user_id: userId, equipment_id: eq.id, action: "equipment_created",
+        details: { equipment_name: name, identifier: ident, simulated_customer: customer } },
+      { user_id: userId, equipment_id: eq.id, action: "key_checked_out",
+        details: { equipment_name: name, identifier: ident, simulated_customer: customer } },
+    ]);
+    return customer;
+  };
+
   const run = async () => {
     setBusy(true);
     try {
-      // Philippines bounding box (approx mainland)
-      const lat = 6 + Math.random() * 12;   // 6 - 18
-      const lng = 120 + Math.random() * 6;  // 120 - 126
-      const customer = `${rand(FIRST)} ${rand(LAST)}`;
-      const type = rand(TYPES);
-      const ident = `${type.slice(0,2).toUpperCase()}-${Math.floor(1000 + Math.random()*9000)}`;
-      const name = `${type} #${Math.floor(Math.random()*900)+100}`;
-
-      // Optional: create a site near the random point in a PH city
-      let siteId: string | null = null;
-      if (Math.random() < 0.5 || sites.length === 0) {
-        const { data: site, error: sErr } = await supabase.from("sites").insert({
-          name: `${rand(CITIES)} Site ${Math.floor(Math.random()*900)}`,
-          address: `Simulated location, Philippines`,
-          latitude: lat, longitude: lng,
-        }).select().single();
-        if (sErr) throw sErr;
-        siteId = site.id;
-      } else {
-        siteId = rand(sites).id;
-      }
-
-      const { data: eq, error: eErr } = await supabase.from("equipment").insert({
-        name, type, identifier: ident, site_id: siteId, latitude: lat, longitude: lng,
-      }).select().single();
-      if (eErr) throw eErr;
-
-      await supabase.from("audit_log").insert({
-        user_id: userId, equipment_id: eq.id, action: "equipment_created",
-        details: { equipment_name: name, identifier: ident, simulated_customer: customer },
-      });
-      await supabase.from("checkouts").insert({
-        equipment_id: eq.id, user_id: userId, notes: `Simulated checkout by ${customer}`,
-      });
-      await supabase.from("equipment").update({ status: "checked_out" }).eq("id", eq.id);
-      await supabase.from("audit_log").insert({
-        user_id: userId, equipment_id: eq.id, action: "key_checked_out",
-        details: { equipment_name: name, identifier: ident, simulated_customer: customer },
-      });
-
-      toast.success(`Simulated: ${customer} → ${name}`);
+      const count = 5 + Math.floor(Math.random() * 4); // 5-8
+      const results = await Promise.all(Array.from({ length: count }, () => simulateOne()));
+      toast.success(`Simulated ${results.length} checkouts across the Philippines`);
       onDone();
     } catch (e: any) {
       toast.error(e.message);
