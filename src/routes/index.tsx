@@ -443,7 +443,7 @@ function SimulateButton({ userId, sites, onDone }: { userId: string; sites: Site
 
   return (
     <Button onClick={run} disabled={busy} variant="default">
-      <Sparkles className="h-4 w-4 mr-1.5" />{busy ? "Simulating…" : "Simulate random checkout (PH)"}
+      <Sparkles className="h-4 w-4 mr-1.5" />{busy ? "Simulating…" : "Simulate batch checkouts (PH)"}
     </Button>
   );
 }
