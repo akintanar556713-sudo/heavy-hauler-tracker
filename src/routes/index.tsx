@@ -191,8 +191,25 @@ function Dashboard() {
         </div>
 
         <div className="grid lg:grid-cols-[1fr_380px] gap-4">
-          <Card className="overflow-hidden h-[500px] p-0">
-            <EquipmentMap markers={markers} onMarkerClick={setSelectedId} selectedId={selectedId} />
+          <Card className="overflow-hidden h-[500px] p-0 relative">
+            {pickMode && (
+              <div className="absolute top-2 left-1/2 -translate-x-1/2 z-[400] bg-primary text-primary-foreground text-xs font-medium px-3 py-1.5 rounded-full shadow-lg flex items-center gap-2 pointer-events-auto">
+                <MapPin className="h-3.5 w-3.5" /> Click map to set site location
+                <button type="button" onClick={() => setPickMode(false)} className="ml-1 underline">Cancel</button>
+              </div>
+            )}
+            <EquipmentMap
+              markers={markers}
+              onMarkerClick={setSelectedId}
+              selectedId={selectedId}
+              pickMode={pickMode}
+              pickedPoint={siteForm.latitude && siteForm.longitude ? { lat: parseFloat(siteForm.latitude), lng: parseFloat(siteForm.longitude) } : null}
+              onMapClick={(lat, lng) => {
+                setSiteForm(f => ({ ...f, latitude: lat.toFixed(6), longitude: lng.toFixed(6) }));
+                setPickMode(false);
+                setSiteDialogOpen(true);
+              }}
+            />
           </Card>
           <Card className="p-4 h-[500px] flex flex-col">
             <div className="flex items-center justify-between mb-3">
