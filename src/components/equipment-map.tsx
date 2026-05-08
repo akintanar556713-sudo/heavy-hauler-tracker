@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
-import L from "leaflet";
+import { useEffect, useRef, useState } from "react";
+import type * as LType from "leaflet";
 
 export type MapMarker = {
   id: string;
