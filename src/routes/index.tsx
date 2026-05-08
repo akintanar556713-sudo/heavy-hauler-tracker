@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { EquipmentMap, type MapMarker } from "@/components/equipment-map";
 import { toast } from "sonner";
-import { HardHat, Plus, KeyRound, MapPin, History, LogOut, Wrench, CheckCircle2, Truck, ArrowRightLeft } from "lucide-react";
+import { HardHat, Plus, KeyRound, MapPin, History, LogOut, Wrench, CheckCircle2, Truck, ArrowRightLeft, Sparkles, Shield } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import type { User } from "@supabase/supabase-js";
 
