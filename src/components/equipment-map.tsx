@@ -26,14 +26,22 @@ export function EquipmentMap({
   markers,
   onMarkerClick,
   selectedId,
+  pickMode,
+  onMapClick,
+  pickedPoint,
 }: {
   markers: MapMarker[];
   onMarkerClick?: (id: string) => void;
   selectedId?: string | null;
+  pickMode?: boolean;
+  onMapClick?: (lat: number, lng: number) => void;
+  pickedPoint?: { lat: number; lng: number } | null;
 }) {
   const elRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<LType.Map | null>(null);
   const layerRef = useRef<LType.LayerGroup | null>(null);
+  const pickLayerRef = useRef<LType.LayerGroup | null>(null);
+  const clickHandlerRef = useRef<((e: LType.LeafletMouseEvent) => void) | null>(null);
   const [L, setL] = useState<typeof LType | null>(null);
 
   useEffect(() => {
@@ -50,9 +58,47 @@ export function EquipmentMap({
       maxZoom: 19,
     }).addTo(map);
     layerRef.current = L.layerGroup().addTo(map);
+    pickLayerRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
     return () => { map.remove(); mapRef.current = null; };
   }, [L]);
+
+  // Toggle click handler + cursor for pick mode
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!L || !map) return;
+    const container = map.getContainer();
+    if (clickHandlerRef.current) {
+      map.off("click", clickHandlerRef.current);
+      clickHandlerRef.current = null;
+    }
+    container.classList.toggle("picking", !!pickMode);
+    if (pickMode && onMapClick) {
+      const handler = (e: LType.LeafletMouseEvent) => onMapClick(e.latlng.lat, e.latlng.lng);
+      clickHandlerRef.current = handler;
+      map.on("click", handler);
+    }
+    return () => {
+      if (clickHandlerRef.current) map.off("click", clickHandlerRef.current);
+      clickHandlerRef.current = null;
+      container.classList.remove("picking");
+    };
+  }, [L, pickMode, onMapClick]);
+
+  // Render picked point
+  useEffect(() => {
+    const layer = pickLayerRef.current;
+    if (!L || !layer) return;
+    layer.clearLayers();
+    if (pickedPoint) {
+      L.marker([pickedPoint.lat, pickedPoint.lng], {
+        icon: L.divIcon({
+          html: `<div style="width:18px;height:18px;border-radius:50%;background:oklch(0.85 0.16 92);border:3px solid oklch(0.22 0.02 250);box-shadow:0 2px 6px rgba(0,0,0,.4)"></div>`,
+          className: "", iconSize: [18, 18], iconAnchor: [9, 9],
+        }),
+      }).addTo(layer);
+    }
+  }, [L, pickedPoint]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -69,9 +115,10 @@ export function EquipmentMap({
       if (selectedId === m.id) marker.openPopup();
       bounds.push([m.lat, m.lng]);
     });
+    if (pickMode) return; // don't auto-fit while picking
     if (bounds.length === 1) map.setView(bounds[0], 13);
     else map.fitBounds(bounds, { padding: [40, 40] });
-  }, [L, markers, selectedId, onMarkerClick]);
+  }, [L, markers, selectedId, onMarkerClick, pickMode]);
 
   return <div ref={elRef} className="h-full w-full rounded-lg" />;
 }
