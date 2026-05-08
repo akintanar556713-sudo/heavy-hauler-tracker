@@ -438,9 +438,15 @@ function NewEquipmentDialog({ sites, userId, onCreated }: { sites: Site[]; userI
   );
 }
 
-function NewSiteDialog({ onCreated }: { onCreated: () => void }) {
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", address: "", latitude: "", longitude: "" });
+type SiteForm = { name: string; address: string; latitude: string; longitude: string };
+function NewSiteDialog({ open, onOpenChange, form, setForm, onPickOnMap, onCreated }: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  form: SiteForm;
+  setForm: React.Dispatch<React.SetStateAction<SiteForm>>;
+  onPickOnMap: () => void;
+  onCreated: () => void;
+}) {
   const [busy, setBusy] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
@@ -452,13 +458,13 @@ function NewSiteDialog({ onCreated }: { onCreated: () => void }) {
       });
       if (error) throw error;
       toast.success("Site added");
-      setOpen(false); setForm({ name: "", address: "", latitude: "", longitude: "" });
+      onOpenChange(false); setForm({ name: "", address: "", latitude: "", longitude: "" });
       onCreated();
     } catch (e: any) { toast.error(e.message); } finally { setBusy(false); }
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild><Button size="sm"><Plus className="h-4 w-4 mr-1" />New site</Button></DialogTrigger>
       <DialogContent>
         <DialogHeader><DialogTitle>Add job site</DialogTitle></DialogHeader>
@@ -469,8 +475,10 @@ function NewSiteDialog({ onCreated }: { onCreated: () => void }) {
             <div><Label>Latitude</Label><Input type="number" step="any" value={form.latitude} onChange={e => setForm({...form, latitude: e.target.value})} required placeholder="40.7128" /></div>
             <div><Label>Longitude</Label><Input type="number" step="any" value={form.longitude} onChange={e => setForm({...form, longitude: e.target.value})} required placeholder="-74.0060" /></div>
           </div>
-          <p className="text-xs text-muted-foreground">Tip: right-click on Google Maps to copy coordinates.</p>
-          <DialogFooter><Button type="submit" disabled={busy}>Add site</Button></DialogFooter>
+          <Button type="button" variant="outline" size="sm" onClick={onPickOnMap} className="w-full">
+            <MapPin className="h-4 w-4 mr-1" />Pick location on map
+          </Button>
+          <DialogFooter><Button type="submit" disabled={busy || !form.latitude || !form.longitude}>Add site</Button></DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
