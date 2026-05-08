@@ -183,6 +183,11 @@ function Dashboard() {
             <HardHat className="h-5 w-5" /> FleetSite
           </Link>
           <div className="flex items-center gap-3 text-sm">
+            {isAdmin && (
+              <span className="hidden sm:inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-secondary/20 text-secondary border border-secondary/40">
+                <Shield className="h-3 w-3" />Admin
+              </span>
+            )}
             <span className="hidden sm:block text-sidebar-foreground/70">{profileMap[user.id] ?? user.email}</span>
             <Button variant="ghost" size="sm" onClick={async () => { await supabase.auth.signOut(); navigate({ to: "/login" }); }}>
               <LogOut className="h-4 w-4 mr-1.5" />Sign out
@@ -201,7 +206,7 @@ function Dashboard() {
 
         <div className="grid lg:grid-cols-[1fr_380px] gap-4">
           <Card className="overflow-hidden h-[500px] p-0 relative">
-            {pickMode && (
+            {pickMode && isAdmin && (
               <div className="absolute top-2 left-1/2 -translate-x-1/2 z-[400] bg-primary text-primary-foreground text-xs font-medium px-3 py-1.5 rounded-full shadow-lg flex items-center gap-2 pointer-events-auto">
                 <MapPin className="h-3.5 w-3.5" /> Click map to set site location
                 <button type="button" onClick={() => setPickMode(false)} className="ml-1 underline">Cancel</button>
@@ -211,19 +216,19 @@ function Dashboard() {
               markers={markers}
               onMarkerClick={setSelectedId}
               selectedId={selectedId}
-              pickMode={pickMode}
-              pickedPoint={siteForm.latitude && siteForm.longitude ? { lat: parseFloat(siteForm.latitude), lng: parseFloat(siteForm.longitude) } : null}
-              onMapClick={(lat, lng) => {
+              pickMode={pickMode && isAdmin}
+              pickedPoint={isAdmin && siteForm.latitude && siteForm.longitude ? { lat: parseFloat(siteForm.latitude), lng: parseFloat(siteForm.longitude) } : null}
+              onMapClick={isAdmin ? (lat, lng) => {
                 setSiteForm(f => ({ ...f, latitude: lat.toFixed(6), longitude: lng.toFixed(6) }));
                 setPickMode(false);
                 setSiteDialogOpen(true);
-              }}
+              } : undefined}
             />
           </Card>
           <Card className="p-4 h-[500px] flex flex-col">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold">Live equipment</h3>
-              <NewEquipmentDialog sites={sitesQ.data ?? []} userId={user.id} onCreated={refreshAll} />
+              {isAdmin && <NewEquipmentDialog sites={sitesQ.data ?? []} userId={user.id} onCreated={refreshAll} />}
             </div>
             <div className="flex-1 overflow-y-auto space-y-2 pr-1">
               {(equipmentQ.data ?? []).map(eq => (
@@ -238,135 +243,211 @@ function Dashboard() {
                   </div>
                 </button>
               ))}
-              {!equipmentQ.data?.length && <p className="text-sm text-muted-foreground text-center py-8">No equipment yet. Add your first machine.</p>}
+              {!equipmentQ.data?.length && <p className="text-sm text-muted-foreground text-center py-8">No equipment yet{isAdmin ? ". Add your first machine." : "."}</p>}
             </div>
           </Card>
         </div>
 
-        <Tabs defaultValue="equipment">
-          <TabsList>
-            <TabsTrigger value="equipment"><Truck className="h-4 w-4 mr-1.5" />Equipment</TabsTrigger>
-            <TabsTrigger value="sites"><MapPin className="h-4 w-4 mr-1.5" />Sites</TabsTrigger>
-            <TabsTrigger value="audit"><History className="h-4 w-4 mr-1.5" />Audit log</TabsTrigger>
-          </TabsList>
+        {isAdmin ? (
+          <>
+            <div className="flex justify-end">
+              <SimulateButton userId={user.id} sites={sitesQ.data ?? []} onDone={() => { refreshAll(); qc.invalidateQueries({ queryKey: ["sites"] }); }} />
+            </div>
+            <Tabs defaultValue="equipment">
+              <TabsList>
+                <TabsTrigger value="equipment"><Truck className="h-4 w-4 mr-1.5" />Equipment</TabsTrigger>
+                <TabsTrigger value="sites"><MapPin className="h-4 w-4 mr-1.5" />Sites</TabsTrigger>
+                <TabsTrigger value="audit"><History className="h-4 w-4 mr-1.5" />Audit log</TabsTrigger>
+              </TabsList>
 
-          <TabsContent value="equipment" className="mt-4">
-            <Card className="overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-muted text-muted-foreground">
-                  <tr>
-                    <th className="text-left p-3 font-medium">Machine</th>
-                    <th className="text-left p-3 font-medium hidden md:table-cell">Identifier</th>
-                    <th className="text-left p-3 font-medium hidden md:table-cell">Site</th>
-                    <th className="text-left p-3 font-medium">Status</th>
-                    <th className="text-right p-3 font-medium">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(equipmentQ.data ?? []).map(eq => {
-                    const open = checkoutsQ.data?.find(c => c.equipment_id === eq.id && !c.returned_at);
-                    return (
-                      <tr key={eq.id} className="border-t">
-                        <td className="p-3">
-                          <div className="font-medium">{eq.name}</div>
-                          <div className="text-xs text-muted-foreground">{eq.type}</div>
-                        </td>
-                        <td className="p-3 font-mono text-xs hidden md:table-cell">{eq.identifier}</td>
-                        <td className="p-3 hidden md:table-cell">{eq.site_id ? siteMap[eq.site_id]?.name ?? "—" : <span className="text-muted-foreground">Unassigned</span>}</td>
-                        <td className="p-3"><StatusBadge status={eq.status} /></td>
-                        <td className="p-3 text-right space-x-1">
-                          <AssignDialog eq={eq} sites={sitesQ.data ?? []} onAssign={(siteId) => assignMut.mutate({ eq, siteId })} />
-                          {eq.status === "available" ? (
-                            <Button size="sm" onClick={() => checkoutMut.mutate(eq)} disabled={checkoutMut.isPending}>
-                              <KeyRound className="h-3.5 w-3.5 mr-1" />Check out
-                            </Button>
-                          ) : eq.status === "checked_out" ? (
-                            <Button size="sm" variant="secondary" onClick={() => returnMut.mutate(eq)} disabled={returnMut.isPending}>
-                              Return {open && profileMap[open.user_id] ? `(${profileMap[open.user_id]})` : ""}
-                            </Button>
-                          ) : null}
-                        </td>
+              <TabsContent value="equipment" className="mt-4">
+                <Card className="overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted text-muted-foreground">
+                      <tr>
+                        <th className="text-left p-3 font-medium">Machine</th>
+                        <th className="text-left p-3 font-medium hidden md:table-cell">Identifier</th>
+                        <th className="text-left p-3 font-medium hidden md:table-cell">Site</th>
+                        <th className="text-left p-3 font-medium">Status</th>
+                        <th className="text-right p-3 font-medium">Actions</th>
                       </tr>
-                    );
-                  })}
-                  {!equipmentQ.data?.length && <tr><td colSpan={5} className="p-8 text-center text-muted-foreground">No equipment yet.</td></tr>}
-                </tbody>
-              </table>
-            </Card>
-          </TabsContent>
+                    </thead>
+                    <tbody>
+                      {(equipmentQ.data ?? []).map(eq => {
+                        const open = checkoutsQ.data?.find(c => c.equipment_id === eq.id && !c.returned_at);
+                        return (
+                          <tr key={eq.id} className="border-t">
+                            <td className="p-3">
+                              <div className="font-medium">{eq.name}</div>
+                              <div className="text-xs text-muted-foreground">{eq.type}</div>
+                            </td>
+                            <td className="p-3 font-mono text-xs hidden md:table-cell">{eq.identifier}</td>
+                            <td className="p-3 hidden md:table-cell">{eq.site_id ? siteMap[eq.site_id]?.name ?? "—" : <span className="text-muted-foreground">Unassigned</span>}</td>
+                            <td className="p-3"><StatusBadge status={eq.status} /></td>
+                            <td className="p-3 text-right space-x-1">
+                              <AssignDialog eq={eq} sites={sitesQ.data ?? []} onAssign={(siteId) => assignMut.mutate({ eq, siteId })} />
+                              {eq.status === "available" ? (
+                                <Button size="sm" onClick={() => checkoutMut.mutate(eq)} disabled={checkoutMut.isPending}>
+                                  <KeyRound className="h-3.5 w-3.5 mr-1" />Check out
+                                </Button>
+                              ) : eq.status === "checked_out" ? (
+                                <Button size="sm" variant="secondary" onClick={() => returnMut.mutate(eq)} disabled={returnMut.isPending}>
+                                  Return {open && profileMap[open.user_id] ? `(${profileMap[open.user_id]})` : ""}
+                                </Button>
+                              ) : null}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {!equipmentQ.data?.length && <tr><td colSpan={5} className="p-8 text-center text-muted-foreground">No equipment yet.</td></tr>}
+                    </tbody>
+                  </table>
+                </Card>
+              </TabsContent>
 
-          <TabsContent value="sites" className="mt-4">
-            <Card className="p-4">
-              <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
-                <h3 className="font-semibold">Job sites</h3>
-                <div className="flex items-center gap-2">
-                  <Button size="sm" variant="outline" onClick={() => { setPickMode(true); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
-                    <MapPin className="h-4 w-4 mr-1" />Pick on map
-                  </Button>
-                  <NewSiteDialog
-                    open={siteDialogOpen}
-                    onOpenChange={setSiteDialogOpen}
-                    form={siteForm}
-                    setForm={setSiteForm}
-                    onPickOnMap={() => { setSiteDialogOpen(false); setPickMode(true); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-                    onCreated={() => qc.invalidateQueries({ queryKey: ["sites"] })}
-                  />
-                </div>
-              </div>
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {(sitesQ.data ?? []).map(s => {
-                  const count = equipmentQ.data?.filter(e => e.site_id === s.id).length ?? 0;
-                  return (
-                    <Card key={s.id} className="p-3">
-                      <div className="flex items-start gap-2">
-                        <MapPin className="h-4 w-4 text-secondary mt-0.5" />
-                        <div className="min-w-0 flex-1">
-                          <div className="font-medium">{s.name}</div>
-                          {s.address && <div className="text-xs text-muted-foreground">{s.address}</div>}
-                          <div className="text-xs mt-1"><Badge variant="outline">{count} machine{count === 1 ? "" : "s"}</Badge></div>
-                        </div>
-                      </div>
-                    </Card>
-                  );
-                })}
-                {!sitesQ.data?.length && <p className="text-sm text-muted-foreground col-span-full text-center py-6">No sites yet. Add one to assign equipment.</p>}
-              </div>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="audit" className="mt-4">
-            <Card className="p-4">
-              <h3 className="font-semibold mb-3 flex items-center gap-1.5"><History className="h-4 w-4" />Audit log</h3>
-              <div className="space-y-1">
-                {(auditQ.data ?? []).map(a => {
-                  const eq = a.equipment_id ? equipmentMap[a.equipment_id] : null;
-                  const who = a.user_id ? profileMap[a.user_id] ?? "Unknown" : "System";
-                  const verb = a.action === "key_checked_out" ? "checked out keys to" :
-                               a.action === "key_returned" ? "returned keys for" :
-                               a.action === "site_assigned" ? "assigned" :
-                               a.action === "equipment_created" ? "added" : a.action;
-                  const target = (a.details as any)?.equipment_name ?? eq?.name ?? "";
-                  const extra = a.action === "site_assigned" ? ` to ${(a.details as any)?.site_name ?? ""}` : "";
-                  const Icon = a.action === "key_checked_out" ? KeyRound : a.action === "key_returned" ? CheckCircle2 : a.action === "site_assigned" ? ArrowRightLeft : Plus;
-                  return (
-                    <div key={a.id} className="flex items-center gap-3 py-2 border-b last:border-0 text-sm">
-                      <div className="h-8 w-8 rounded-full bg-muted grid place-items-center shrink-0"><Icon className="h-4 w-4" /></div>
-                      <div className="flex-1 min-w-0">
-                        <span className="font-medium">{who}</span>{" "}
-                        <span className="text-muted-foreground">{verb}</span>{" "}
-                        <span className="font-medium">{target}</span>{extra}
-                      </div>
-                      <span className="text-xs text-muted-foreground shrink-0">{formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}</span>
+              <TabsContent value="sites" className="mt-4">
+                <Card className="p-4">
+                  <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+                    <h3 className="font-semibold">Job sites</h3>
+                    <div className="flex items-center gap-2">
+                      <Button size="sm" variant="outline" onClick={() => { setPickMode(true); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
+                        <MapPin className="h-4 w-4 mr-1" />Pick on map
+                      </Button>
+                      <NewSiteDialog
+                        open={siteDialogOpen}
+                        onOpenChange={setSiteDialogOpen}
+                        form={siteForm}
+                        setForm={setSiteForm}
+                        onPickOnMap={() => { setSiteDialogOpen(false); setPickMode(true); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                        onCreated={() => qc.invalidateQueries({ queryKey: ["sites"] })}
+                      />
                     </div>
-                  );
-                })}
-                {!auditQ.data?.length && <p className="text-sm text-muted-foreground text-center py-6">No activity yet.</p>}
-              </div>
-            </Card>
-          </TabsContent>
-        </Tabs>
+                  </div>
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {(sitesQ.data ?? []).map(s => {
+                      const count = equipmentQ.data?.filter(e => e.site_id === s.id).length ?? 0;
+                      return (
+                        <Card key={s.id} className="p-3">
+                          <div className="flex items-start gap-2">
+                            <MapPin className="h-4 w-4 text-secondary mt-0.5" />
+                            <div className="min-w-0 flex-1">
+                              <div className="font-medium">{s.name}</div>
+                              {s.address && <div className="text-xs text-muted-foreground">{s.address}</div>}
+                              <div className="text-xs mt-1"><Badge variant="outline">{count} machine{count === 1 ? "" : "s"}</Badge></div>
+                            </div>
+                          </div>
+                        </Card>
+                      );
+                    })}
+                    {!sitesQ.data?.length && <p className="text-sm text-muted-foreground col-span-full text-center py-6">No sites yet. Add one to assign equipment.</p>}
+                  </div>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="audit" className="mt-4">
+                <Card className="p-4">
+                  <h3 className="font-semibold mb-3 flex items-center gap-1.5"><History className="h-4 w-4" />Audit log</h3>
+                  <div className="space-y-1">
+                    {(auditQ.data ?? []).map(a => {
+                      const eq = a.equipment_id ? equipmentMap[a.equipment_id] : null;
+                      const who = a.user_id ? profileMap[a.user_id] ?? "Unknown" : "System";
+                      const verb = a.action === "key_checked_out" ? "checked out keys to" :
+                                   a.action === "key_returned" ? "returned keys for" :
+                                   a.action === "site_assigned" ? "assigned" :
+                                   a.action === "equipment_created" ? "added" : a.action;
+                      const target = (a.details as any)?.equipment_name ?? eq?.name ?? "";
+                      const extra = a.action === "site_assigned" ? ` to ${(a.details as any)?.site_name ?? ""}` : "";
+                      const Icon = a.action === "key_checked_out" ? KeyRound : a.action === "key_returned" ? CheckCircle2 : a.action === "site_assigned" ? ArrowRightLeft : Plus;
+                      return (
+                        <div key={a.id} className="flex items-center gap-3 py-2 border-b last:border-0 text-sm">
+                          <div className="h-8 w-8 rounded-full bg-muted grid place-items-center shrink-0"><Icon className="h-4 w-4" /></div>
+                          <div className="flex-1 min-w-0">
+                            <span className="font-medium">{who}</span>{" "}
+                            <span className="text-muted-foreground">{verb}</span>{" "}
+                            <span className="font-medium">{target}</span>{extra}
+                          </div>
+                          <span className="text-xs text-muted-foreground shrink-0">{formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}</span>
+                        </div>
+                      );
+                    })}
+                    {!auditQ.data?.length && <p className="text-sm text-muted-foreground text-center py-6">No activity yet.</p>}
+                  </div>
+                </Card>
+              </TabsContent>
+            </Tabs>
+          </>
+        ) : (
+          <Card className="p-4 text-sm text-muted-foreground text-center">
+            You have read-only access. Contact an administrator to log equipment, assign sites, or check out keys.
+          </Card>
+        )}
       </main>
     </div>
+  );
+}
+
+function SimulateButton({ userId, sites, onDone }: { userId: string; sites: Site[]; onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const FIRST = ["Juan","Maria","Jose","Ana","Pedro","Liza","Carlo","Andrea","Miguel","Sofia","Rafael","Bianca","Diego","Camille","Paulo"];
+  const LAST = ["Dela Cruz","Reyes","Santos","Garcia","Mendoza","Bautista","Aquino","Ramos","Torres","Villanueva","Castillo","Domingo","Salazar"];
+  const TYPES = ["Excavator","Bulldozer","Crane","Loader","Dump truck","Forklift","Compactor","Generator"];
+  const CITIES = ["Manila","Cebu","Davao","Quezon City","Iloilo","Baguio","Cagayan de Oro","Zamboanga","Bacolod","Tacloban","Puerto Princesa"];
+  const rand = <T,>(a: T[]) => a[Math.floor(Math.random() * a.length)];
+
+  const run = async () => {
+    setBusy(true);
+    try {
+      // Philippines bounding box (approx mainland)
+      const lat = 6 + Math.random() * 12;   // 6 - 18
+      const lng = 120 + Math.random() * 6;  // 120 - 126
+      const customer = `${rand(FIRST)} ${rand(LAST)}`;
+      const type = rand(TYPES);
+      const ident = `${type.slice(0,2).toUpperCase()}-${Math.floor(1000 + Math.random()*9000)}`;
+      const name = `${type} #${Math.floor(Math.random()*900)+100}`;
+
+      // Optional: create a site near the random point in a PH city
+      let siteId: string | null = null;
+      if (Math.random() < 0.5 || sites.length === 0) {
+        const { data: site, error: sErr } = await supabase.from("sites").insert({
+          name: `${rand(CITIES)} Site ${Math.floor(Math.random()*900)}`,
+          address: `Simulated location, Philippines`,
+          latitude: lat, longitude: lng,
+        }).select().single();
+        if (sErr) throw sErr;
+        siteId = site.id;
+      } else {
+        siteId = rand(sites).id;
+      }
+
+      const { data: eq, error: eErr } = await supabase.from("equipment").insert({
+        name, type, identifier: ident, site_id: siteId, latitude: lat, longitude: lng,
+      }).select().single();
+      if (eErr) throw eErr;
+
+      await supabase.from("audit_log").insert({
+        user_id: userId, equipment_id: eq.id, action: "equipment_created",
+        details: { equipment_name: name, identifier: ident, simulated_customer: customer },
+      });
+      await supabase.from("checkouts").insert({
+        equipment_id: eq.id, user_id: userId, notes: `Simulated checkout by ${customer}`,
+      });
+      await supabase.from("equipment").update({ status: "checked_out" }).eq("id", eq.id);
+      await supabase.from("audit_log").insert({
+        user_id: userId, equipment_id: eq.id, action: "key_checked_out",
+        details: { equipment_name: name, identifier: ident, simulated_customer: customer },
+      });
+
+      toast.success(`Simulated: ${customer} → ${name}`);
+      onDone();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <Button onClick={run} disabled={busy} variant="default">
+      <Sparkles className="h-4 w-4 mr-1.5" />{busy ? "Simulating…" : "Simulate random checkout (PH)"}
+    </Button>
   );
 }
 
