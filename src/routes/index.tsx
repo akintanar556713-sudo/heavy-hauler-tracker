@@ -288,9 +288,21 @@ function Dashboard() {
 
           <TabsContent value="sites" className="mt-4">
             <Card className="p-4">
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
                 <h3 className="font-semibold">Job sites</h3>
-                <NewSiteDialog onCreated={() => qc.invalidateQueries({ queryKey: ["sites"] })} />
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="outline" onClick={() => { setPickMode(true); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
+                    <MapPin className="h-4 w-4 mr-1" />Pick on map
+                  </Button>
+                  <NewSiteDialog
+                    open={siteDialogOpen}
+                    onOpenChange={setSiteDialogOpen}
+                    form={siteForm}
+                    setForm={setSiteForm}
+                    onPickOnMap={() => { setSiteDialogOpen(false); setPickMode(true); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                    onCreated={() => qc.invalidateQueries({ queryKey: ["sites"] })}
+                  />
+                </div>
               </div>
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {(sitesQ.data ?? []).map(s => {
