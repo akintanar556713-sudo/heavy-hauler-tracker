@@ -88,6 +88,15 @@ function Dashboard() {
       if (error) throw error; return data as Profile[];
     },
   });
+  const roleQ = useQuery({
+    queryKey: ["role", user?.id], enabled,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("user_roles").select("role").eq("user_id", user!.id);
+      if (error) throw error;
+      return (data ?? []).map(r => r.role) as ("admin" | "user")[];
+    },
+  });
+  const isAdmin = (roleQ.data ?? []).includes("admin");
 
   const profileMap = useMemo(() => Object.fromEntries((profilesQ.data ?? []).map(p => [p.id, p.full_name ?? "Unknown"])), [profilesQ.data]);
   const equipmentMap = useMemo(() => Object.fromEntries((equipmentQ.data ?? []).map(e => [e.id, e])), [equipmentQ.data]);
