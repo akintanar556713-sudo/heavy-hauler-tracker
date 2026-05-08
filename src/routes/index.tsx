@@ -103,10 +103,12 @@ function Dashboard() {
   const siteMap = useMemo(() => Object.fromEntries((sitesQ.data ?? []).map(s => [s.id, s])), [sitesQ.data]);
 
   const markers: MapMarker[] = useMemo(() =>
-    (equipmentQ.data ?? []).map(e => ({
-      id: e.id, lat: e.latitude, lng: e.longitude, label: e.name,
-      sublabel: `${e.type} • ${e.identifier}`, status: e.status,
-    })), [equipmentQ.data]);
+    (equipmentQ.data ?? [])
+      .filter(e => Number.isFinite(e.latitude) && Number.isFinite(e.longitude) && Math.abs(e.latitude) <= 90 && Math.abs(e.longitude) <= 180)
+      .map(e => ({
+        id: e.id, lat: e.latitude, lng: e.longitude, label: e.name,
+        sublabel: `${e.type} • ${e.identifier}`, status: e.status,
+      })), [equipmentQ.data]);
 
   const refreshAll = () => {
     qc.invalidateQueries({ queryKey: ["equipment"] });
